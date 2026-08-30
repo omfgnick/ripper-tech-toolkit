@@ -26,3 +26,6 @@ dados/
 # Sistema
 Thumbs.db
 desktop.ini
+
+# Material de divulgacao, nao faz parte do projeto
+_post/
