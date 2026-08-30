@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  testes:
+    name: Testes
+    # windows-latest e obrigatorio: o projeto consulta CIM, registro e
+    # Win32 direto. Num runner Linux nem os testes de regra pura passariam,
+    # porque os modulos importam ctypes.WinDLL na carga.
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requisitos.txt
+
+      - name: Compilar tudo
+        run: python -m compileall -q tecnico principal.py construir.py
+
+      - name: Testes
+        # QT_QPA_PLATFORM nao vai como offscreen: o backend offscreen do
+        # Windows nao enxerga a base de fontes e o teste de tipografia
+        # falharia por motivo errado. O runner tem sessao grafica.
+        run: python -m unittest discover -s testes -v
+
+  empacotar:
+    name: Executavel
+    runs-on: windows-latest
+    needs: testes
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install -r requisitos.txt
+
+      - name: Compilar o executavel
+        run: python construir.py
+
+      # Confere o que so aparece depois de empacotar: fonte embutida,
+      # icones, SSL. Sao falhas invisiveis rodando do codigo-fonte.
+      - name: Verificar o pacote
+        run: |
+          .\dist\Ripper.exe --verificar
+          if ($LASTEXITCODE -ne 0) { throw "verificacao falhou" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ripper-exe
+          path: dist/Ripper.exe
+          retention-days: 14
