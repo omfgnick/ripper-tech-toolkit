@@ -477,6 +477,18 @@ Arquivo em uso é pulado em silêncio — forçar exclusão de arquivo travado
 
 O app **não pede UAC ao abrir**. As telas que precisam avisam na hora.
 
+## Licença
+
+O código deste repositório está sob **GPL-3.0** (arquivo `LICENSE`).
+
+Os recursos de terceiros que viajam junto têm licença própria e
+compatível:
+
+| Recurso | Licença | Onde |
+| --- | --- | --- |
+| Rajdhani (tipografia da interface) | SIL OFL 1.1 | `recursos/fontes/OFL.txt` |
+| 3dicons (PNGs, hoje sem uso na interface) | CC0 1.0 | `recursos/icones/LICENSE` |
+
 ## Créditos de recursos
 
 **Rajdhani** — Indian Type Foundry, licença SIL Open Font License 1.1.
