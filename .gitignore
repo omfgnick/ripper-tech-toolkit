@@ -1,0 +1,28 @@
+# Ambiente virtual
+.venv/
+venv/
+
+# Artefatos de compilacao
+build/
+dist/
+*.spec
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+
+# Saidas geradas em execucao
+verificacao.txt
+autoteste.txt
+_previa/
+*.pdf
+*.png
+!recursos/**/*.png
+
+# Dados de atendimento: historico, fichas e registros de cliente nunca
+# entram no repositorio, nem quando o modo pendrive os grava aqui.
+dados/
+
+# Sistema
+Thumbs.db
+desktop.ini
