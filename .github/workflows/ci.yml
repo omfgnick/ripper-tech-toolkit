@@ -66,8 +66,15 @@ jobs:
       # icones, SSL. Sao falhas invisiveis rodando do codigo-fonte.
       - name: Verificar o pacote
         run: |
-          .\dist\Ripper.exe --verificar
-          if ($LASTEXITCODE -ne 0) { throw "verificacao falhou" }
+          # Start-Process -Wait, e nao chamada direta: o executavel e do
+          # subsistema grafico, entao o PowerShell nao espera por ele e le
+          # $LASTEXITCODE antes de o processo terminar. Na primeira versao
+          # o passo falhava enquanto a saida dizia "tudo certo".
+          $p = Start-Process -FilePath ".\dist\Ripper.exe" `
+                             -ArgumentList "--verificar" `
+                             -NoNewWindow -Wait -PassThru
+          Get-Content .\disterificacao.txt
+          if ($p.ExitCode -ne 0) { throw "verificacao falhou ($($p.ExitCode))" }
 
       - uses: actions/upload-artifact@v4
         with:
