@@ -46,10 +46,35 @@ class Tarefa:
     argumentos: str = ""
     autor: str = ""
     motivo: str = ""          # preenchido quando ha indicio
+    resolver: str = ""        # como confirmar e como desativar
 
     @property
     def suspeita(self) -> bool:
         return bool(self.motivo)
+
+
+# Cada indicio com o que fazer a seguir. Apontar sem dizer como confirmar
+# transfere a duvida em vez de resolver: o tecnico fica com uma lista de
+# nomes estranhos e nenhum criterio para decidir o que desativar.
+COMO_RESOLVER = {
+    "Tarefa sem programa definido.":
+        "Tarefa órfã — o programa que a criou foi desinstalado sem limpar. "
+        "Não faz nada e pode ser removida sem risco.",
+    "Executa script a partir de pasta de usuário.":
+        "Abra o arquivo num editor de texto antes de decidir: script de "
+        "instalador legítimo é legível; ofuscado ou com URL estranha, "
+        "desative a tarefa e leve o arquivo para análise.",
+    "Executa script em vez de programa.":
+        "Verifique quem assina o script e o que ele faz. Atualizador de "
+        "fabricante costuma ser assim; conteúdo ilegível, não.",
+    "Programa dentro da pasta de temporários.":
+        "Programa legítimo não mora no %TEMP%, que é apagado por limpeza. "
+        "Trate como suspeito até provar o contrário.",
+    "PowerShell com janela oculta ou comando codificado.":
+        "É o padrão mais usado por malware sem arquivo. Decodifique o "
+        "argumento -enc (Base64) antes de qualquer coisa; se não "
+        "reconhecer o conteúdo, desative e faça varredura completa.",
+}
 
 
 def _avaliar(acao: str, argumentos: str) -> str:
@@ -90,6 +115,7 @@ def tarefas(relatar=lambda _: None) -> list[Tarefa]:
     for d in dados:
         acao = (d.get("Acao") or "").strip()
         argumentos = (d.get("Args") or "").strip()
+        motivo = _avaliar(acao, argumentos)
         lista.append(Tarefa(
             nome=(d.get("TaskName") or "").strip(),
             caminho=(d.get("TaskPath") or "").strip(),
@@ -97,7 +123,8 @@ def tarefas(relatar=lambda _: None) -> list[Tarefa]:
             acao=acao,
             argumentos=argumentos,
             autor=(d.get("Autor") or "").strip(),
-            motivo=_avaliar(acao, argumentos),
+            motivo=motivo,
+            resolver=COMO_RESOLVER.get(motivo, ""),
         ))
     lista.sort(key=lambda t: (not t.suspeita, t.nome.lower()))
     relatar(f"{len(lista)} tarefa(s) fora do catálogo da Microsoft.")
@@ -107,6 +134,45 @@ def tarefas(relatar=lambda _: None) -> list[Tarefa]:
 # ---------------------------------------------------------------------
 # EXTENSOES DE NAVEGADOR
 # ---------------------------------------------------------------------
+# Categorias de extensao que merecem conversa com o cliente. Nao sao
+# malware por definicao - varias sao de empresas conhecidas - mas todas
+# leem o que a pessoa navega para funcionar, e o cliente costuma nao saber
+# disso quando instala.
+CATEGORIAS_DE_RISCO = [
+    (("cashback", "cupom", "coupon", "desconto", "promo", "shopping",
+      "honey", "rakuten"),
+     "Cashback e cupom",
+     "Para achar oferta, precisa ler cada página de loja que você abre, "
+     "incluindo o carrinho e o checkout. Vale confirmar com o cliente se "
+     "ele instalou de propósito."),
+    (("search", "busca", "newtab", "nova aba", "homepage"),
+     "Altera busca ou página inicial",
+     "É a categoria mais usada por sequestrador de navegador. Confirme se "
+     "a busca padrão continua sendo a que o cliente escolheu."),
+    (("vpn", "proxy", "unblock", "desbloquе"),
+     "VPN ou proxy",
+     "Todo o tráfego do navegador passa por um servidor de terceiro. "
+     "Gratuito costuma se pagar vendendo esse tráfego."),
+    (("download", "video downloader", "converter", "mp3"),
+     "Baixador de vídeo",
+     "Categoria com histórico de troca de dono e injeção de anúncio "
+     "depois de instalada."),
+    (("pdf", "converter", "editor online"),
+     "Conversor online",
+     "Envia o arquivo para um servidor. Documento de cliente não deveria "
+     "sair da máquina sem ele saber."),
+]
+
+
+def classificar(nome: str, descricao: str = "") -> tuple[str, str]:
+    """(categoria, por que merece atencao). Vazio quando nao se aplica."""
+    alvo = f"{nome} {descricao}".lower()
+    for termos, categoria, motivo in CATEGORIAS_DE_RISCO:
+        if any(t in alvo for t in termos):
+            return categoria, motivo
+    return "", ""
+
+
 @dataclass
 class Extensao:
     navegador: str
@@ -115,6 +181,8 @@ class Extensao:
     nome: str = ""
     versao: str = ""
     descricao: str = ""
+    categoria: str = ""
+    atencao: str = ""
 
 
 def _navegadores() -> list[tuple[str, Path]]:
@@ -201,6 +269,10 @@ def extensoes(relatar=lambda _: None) -> list[Extensao]:
                         alvo, manifesto,
                         manifesto.get("description"))[:120],
                 ))
+                categoria, motivo = classificar(
+                    achadas[-1].nome, achadas[-1].descricao)
+                achadas[-1].categoria = categoria
+                achadas[-1].atencao = motivo
 
     achadas.sort(key=lambda e: (e.navegador, e.nome.lower()))
     relatar(f"{len(achadas)} extensão(ões) encontrada(s).")

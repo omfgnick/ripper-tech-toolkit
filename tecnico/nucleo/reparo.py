@@ -249,3 +249,86 @@ def criar_ponto(descricao: str = "Ripper - antes do reparo",
         return False, ("nenhum ponto encontrado e a proteção não respondeu. "
                        "Verifique se a Proteção do Sistema está ligada")
     return False, "o Windows recusou criar o ponto e não informou o motivo"
+
+
+# ---------------------------------------------------------------------
+# LEITURA DO RESULTADO
+# ---------------------------------------------------------------------
+# Trechos que aparecem na saida dos comandos, e o que cada um significa
+# para o proximo passo. Sao procurados em minusculas e sem acento, porque
+# a saida vem traduzida e a acentuacao varia com a pagina de codigo.
+VEREDITOS = [
+    ("did not find any integrity violations",
+     "ok", "Nenhum arquivo de sistema corrompido. O problema, se persiste, "
+     "não está nos arquivos do Windows."),
+    ("nao encontrou nenhuma violacao",
+     "ok", "Nenhum arquivo de sistema corrompido. O problema, se persiste, "
+     "não está nos arquivos do Windows."),
+    ("successfully repaired",
+     "ok", "Arquivos corrompidos foram encontrados E reparados. Reinicie e "
+     "teste de novo o sintoma original."),
+    ("reparou-os com exito",
+     "ok", "Arquivos corrompidos foram encontrados E reparados. Reinicie e "
+     "teste de novo o sintoma original."),
+    ("was unable to fix",
+     "erro", "Encontrou corrupção que NÃO conseguiu reparar. O próximo "
+     "passo é o DISM, que reconstrói o cache que o SFC usa — depois rode "
+     "o SFC de novo."),
+    ("nao conseguiu corrigir",
+     "erro", "Encontrou corrupção que NÃO conseguiu reparar. O próximo "
+     "passo é o DISM, que reconstrói o cache que o SFC usa — depois rode "
+     "o SFC de novo."),
+    ("the restore operation completed successfully",
+     "ok", "Imagem do Windows restaurada. Rode o SFC agora: ele volta a "
+     "ter um cache íntegro de onde copiar."),
+    ("a operacao de restauracao foi concluida",
+     "ok", "Imagem do Windows restaurada. Rode o SFC agora: ele volta a "
+     "ter um cache íntegro de onde copiar."),
+    ("the source files could not be found",
+     "erro", "O DISM não achou de onde copiar os arquivos. Precisa de "
+     "internet, ou de uma ISO do Windows da mesma versão como fonte."),
+    ("nao foi possivel localizar os arquivos de origem",
+     "erro", "O DISM não achou de onde copiar os arquivos. Precisa de "
+     "internet, ou de uma ISO do Windows da mesma versão como fonte."),
+    ("found no problems",
+     "ok", "Sistema de arquivos íntegro. Se há lentidão, a causa é física "
+     "(veja SMART) e não lógica."),
+    ("nenhum problema",
+     "ok", "Sistema de arquivos íntegro. Se há lentidão, a causa é física "
+     "(veja SMART) e não lógica."),
+    ("errors found",
+     "erro", "CHKDSK achou erros e rodou em modo somente leitura. Use "
+     "'Agendar correção do disco' para que ele corrija no próximo boot."),
+    ("erros encontrados",
+     "erro", "CHKDSK achou erros e rodou em modo somente leitura. Use "
+     "'Agendar correção do disco' para que ele corrija no próximo boot."),
+    ("requires elevation",
+     "erro", "O comando precisa de administrador. Use 'Reabrir como admin' "
+     "na barra lateral."),
+    ("acesso negado",
+     "erro", "O comando precisa de administrador. Use 'Reabrir como admin' "
+     "na barra lateral."),
+]
+
+
+def _sem_acento(texto: str) -> str:
+    import unicodedata
+
+    return "".join(
+        c for c in unicodedata.normalize("NFD", texto.lower())
+        if unicodedata.category(c) != "Mn")
+
+
+def interpretar(saida: str) -> tuple[str, str]:
+    """(situacao, explicacao) a partir da saida crua do comando.
+
+    O texto do SFC e do DISM e longo e traduzido, e o tecnico precisa de
+    uma coisa so: deu certo, e qual o proximo passo. "Reparou" e "nao
+    conseguiu reparar" levam a caminhos opostos, e a diferenca esta numa
+    linha no meio de trinta.
+    """
+    alvo = _sem_acento(saida or "")
+    for trecho, situacao, explicacao in VEREDITOS:
+        if trecho in alvo:
+            return situacao, explicacao
+    return "", ""

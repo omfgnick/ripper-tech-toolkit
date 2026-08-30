@@ -81,10 +81,18 @@ def _analisar(v: Varredura) -> list[Sugestao]:
     if graves:
         from collections import Counter
         tipo = Counter(e.descricao for e in graves).most_common(1)[0]
+        # A verificacao do evento mais frequente vai junto: mandar o
+        # tecnico "ver em Diagnostico" sem dizer o que procurar so
+        # transfere a duvida de tela.
+        onde_olhar = ""
+        for e in graves:
+            if e.descricao == tipo[0] and e.verificar:
+                onde_olhar = f" Verificar: {e.verificar}"
+                break
         sugestoes.append(Sugestao(
             "Falhas registradas no sistema",
             f"{len(graves)} evento(s) crítico(s) em 30 dias. Mais frequente: "
-            f"{tipo[0]} ({tipo[1]}x). Ver detalhes em Diagnóstico.",
+            f"{tipo[0]} ({tipo[1]}x).{onde_olhar}",
             "alta", "diagnostico"))
 
     if v.dispositivos:

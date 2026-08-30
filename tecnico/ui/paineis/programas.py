@@ -150,6 +150,9 @@ class PainelProgramas(PainelBase):
                 filho.setForeground(0, QBrush(QColor(Cor.ATENCAO)))
                 filho.setToolTip(0, t.motivo)
                 QTreeWidgetItem(filho, ["", "", t.motivo])
+                if t.resolver:
+                    QTreeWidgetItem(filho, ["", "", f"→ {t.resolver}"])
+                filho.setExpanded(True)
         raiz.setExpanded(True)
         self.rodar(persistencia.extensoes, self._extensoes_prontas)
 
@@ -158,10 +161,19 @@ class PainelProgramas(PainelBase):
         raiz = QTreeWidgetItem(self.persistencia,
                                [f"Extensões de navegador ({len(lista)})", "", ""])
         raiz.setForeground(0, QBrush(QColor(Cor.DESTAQUE)))
-        for e in lista:
+        # As de categoria conhecida sobem para o topo: sao as que pedem
+        # conversa com o cliente, e enterradas no meio de doze ninguem ve.
+        for e in sorted(lista, key=lambda x: (not x.categoria, x.nome.lower())):
+            rotulo = e.nome or e.identificador
             filho = QTreeWidgetItem(
-                raiz, [e.nome or e.identificador, e.navegador, e.descricao])
+                raiz, [rotulo, e.navegador,
+                       e.categoria or e.descricao])
             filho.setToolTip(0, f"{e.identificador} — v{e.versao}")
+            if e.categoria:
+                filho.setForeground(0, QBrush(QColor(Cor.ATENCAO)))
+                filho.setForeground(2, QBrush(QColor(Cor.ATENCAO)))
+                QTreeWidgetItem(filho, ["", "", e.atencao])
+                filho.setExpanded(True)
         raiz.setExpanded(True)
 
     def remover_fabrica(self) -> None:

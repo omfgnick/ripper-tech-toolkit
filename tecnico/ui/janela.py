@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, QThreadPool
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QFrame,
+    QApplication,
     QHBoxLayout,
     QMessageBox,
     QLabel,
@@ -17,8 +18,17 @@ from PySide6.QtWidgets import (
 )
 
 from ..nucleo import admin
-from ..tema import Cor, Fonte, familia, folha_de_estilo
+from ..tema import (
+    Cor,
+    Fonte,
+    aplicar_tema,
+    familia,
+    folha_de_estilo,
+    gravar_tema,
+    tema_atual,
+)
 from .widgets import Botao
+from .bandeja import Bandeja
 from .efeitos import Sobreposicao
 from .hud import Avisos, FaixaStatus
 from .paineis.diagnostico import PainelDiagnostico
@@ -67,7 +77,7 @@ class BotaoNavegacao(QPushButton):
                 color: {Cor.DESTAQUE};
             }}
             QPushButton:checked {{
-                background: {Cor.DESTAQUE};
+                background: {Cor.DESTAQUE_BLOCO};
                 color: {Cor.SOBRE_DESTAQUE};
                 border-left: 3px solid {Cor.DESTAQUE_FORTE};
             }}
@@ -86,6 +96,10 @@ class Janela(QMainWindow):
         # Camada de efeito por cima de tudo. Criada aqui e nao no
         # final para existir antes do primeiro resizeEvent.
         self.sobreposicao: Sobreposicao | None = None
+        # Fechar recolhe para a bandeja; so o menu do icone e a
+        # troca de tema encerram de verdade.
+        self.encerrar_de_verdade = False
+        self.bandeja: Bandeja | None = None
 
         central = QWidget()
         central.setStyleSheet(f"background: {Cor.FUNDO};")
@@ -136,6 +150,21 @@ class Janela(QMainWindow):
         self.paineis["inicio"].ir_para.connect(self.mostrar)
         self.paineis["relatorios"].ir_para.connect(self.mostrar)
         self.mostrar("inicio")
+        self._montar_bandeja()
+
+    def _montar_bandeja(self) -> None:
+        """Cria o icone da area de notificacao, se o sistema tiver uma.
+
+        Windows Server sem shell grafico e sessao remota mal configurada
+        nao tem bandeja. Sem a checagem, o icone some em silencio e o
+        fechar recolheria a janela para lugar nenhum.
+        """
+        from PySide6.QtWidgets import QSystemTrayIcon
+
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        self.bandeja = Bandeja(self, APLICATIVO)
+        self.bandeja.show()
 
     def _preencher_faixa(self) -> None:
         from ..nucleo import dados, historico
@@ -225,6 +254,17 @@ class Janela(QMainWindow):
 
         coluna.addStretch(1)
 
+        self.btn_tema = Botao(
+            "Tema claro" if tema_atual() == "escuro" else "Tema escuro")
+        self.btn_tema.setToolTip(
+            "Troca entre claro e escuro. A janela é remontada, então "
+            "resultados na tela se perdem.")
+        self.btn_tema.clicked.connect(self.alternar_tema)
+        recuo_tema = QHBoxLayout()
+        recuo_tema.setContentsMargins(12, 6, 12, 6)
+        recuo_tema.addWidget(self.btn_tema)
+        coluna.addLayout(recuo_tema)
+
         rodape = QLabel(f"  versão {VERSAO}")
         rodape.setFont(QFont(Fonte.MONO, 8))
         rodape.setStyleSheet(f"color: {Cor.TEXTO_FRACO}; padding: 0 14px;")
@@ -265,6 +305,56 @@ class Janela(QMainWindow):
         if getattr(self, "avisos", None) is not None:
             self.avisos._reposicionar()
 
+    def paineis_ocupados(self) -> list:
+        """Paineis com tarefa em andamento.
+
+        getattr com padrao, e nao `p.ocupado` direto: PainelInicio nao
+        herda de PainelBase e nao tem essa propriedade. Assumir interface
+        uniforme derrubou o app ao clicar em trocar o tema, e o teste de
+        fumaca nao pegou porque `alternar_tema` remonta a janela e por
+        isso esta fora dele. Este metodo existe para ser testavel sem
+        remontar nada.
+        """
+        return [p for p in self.paineis.values()
+                if getattr(p, "ocupado", False)]
+
+    def alternar_tema(self) -> None:
+        """Troca a paleta e remonta a janela.
+
+        Remontar em vez de repintar: 49 lugares fixam a cor num
+        stylesheet no construtor, e religar todos custaria muito mais
+        risco do que reconstruir uma tela que se troca uma vez por dia.
+        """
+        if self.paineis_ocupados():
+            QMessageBox.information(
+                self, "Trocar tema",
+                "Há uma operação em andamento." + chr(10) + chr(10)
+                + "Trocar o tema remonta a janela e o resultado se perderia. "
+                "Espere terminar.")
+            return
+
+        novo = "claro" if tema_atual() == "escuro" else "escuro"
+        aplicar_tema(novo)
+        gravar_tema(novo)
+
+        aplicacao = QApplication.instance()
+        if aplicacao is not None:
+            aplicacao.setStyleSheet("")
+        # A janela nova nasce com a paleta ja trocada; a antiga sai depois
+        # de a nova aparecer, para nao piscar a area de trabalho.
+        nova = Janela()
+        nova.resize(self.size())
+        nova.move(self.pos())
+        nova.show()
+        self._substituta = nova
+        aplicacao.setProperty("janela_ripper", nova)
+        # Sem isto o fechar recolheria a janela velha para a bandeja e o
+        # tecnico ficaria com duas, uma escondida.
+        self.encerrar_de_verdade = True
+        if self.bandeja is not None:
+            self.bandeja.hide()
+        self.close()
+
     def elevar(self) -> None:
         """Pede elevacao e fecha esta instancia se o UAC for aceito."""
         if admin.reabrir_como_administrador():
@@ -277,13 +367,23 @@ class Janela(QMainWindow):
                 "O Windows não autorizou a abertura como administrador.")
 
     def closeEvent(self, evento) -> None:  # noqa: N802
-        """Espera as tarefas em andamento antes de destruir os paineis.
+        """Recolhe para a bandeja, ou encerra esperando as tarefas.
+
+        O fechar padrao passou a recolher: numa bancada o app fica aberto
+        entre um atendimento e outro, e reabrir a cada vez e uma chance de
+        rodar duas copias por engano. Sair de verdade e escolha explicita
+        no menu do icone.
 
         Sem isto, fechar a janela durante uma varredura faz a tarefa
         emitir sinal para um objeto ja destruido e o app termina com
         "Signal source has been deleted" - erro que o tecnico veria como
         travamento na maquina do cliente.
         """
+        if self.bandeja is not None and not self.encerrar_de_verdade:
+            evento.ignore()
+            self.bandeja.recolher()
+            return
+
         pool = QThreadPool.globalInstance()
         if pool.activeThreadCount():
             for painel in self.paineis.values():

@@ -6,13 +6,19 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import QHBoxLayout, QMessageBox, QTreeWidget, QTreeWidgetItem
 
+from ...nucleo import ficha as nucleo_ficha
 from ...nucleo import rede, wifi
 from ...tema import Cor
 from ..velocimetro import Velocimetro
 from ..widgets import Botao
 from .base import PainelBase
 
-CORES = {"ok": Cor.OK, "atencao": Cor.ATENCAO, "erro": Cor.ERRO}
+# Funcao e nao constante: dicionario no topo do modulo congela as
+# cores da paleta ativa na IMPORTACAO, e a troca de tema depois
+# nao chega ate ele. Foi assim que o texto do botao sumiu no tema
+# claro - continuava branco.
+def cores() -> dict[str, str]:
+    return {"ok": Cor.OK, "atencao": Cor.ATENCAO, "erro": Cor.ERRO}
 SIMBOLOS = {"ok": "OK", "atencao": "!", "erro": "X"}
 
 
@@ -41,6 +47,27 @@ class PainelRede(PainelBase):
             "dividem o mesmo canal.")
         self.btn_wifi.clicked.connect(self.varrer_wifi)
         self.acoes.addWidget(self.btn_wifi)
+
+        # O plano fica na ficha, junto do resto dos dados do cliente: e
+        # dado de quem paga a conta, nao da maquina.
+        from PySide6.QtWidgets import QLabel, QLineEdit
+
+        rotulo_plano = QLabel("Plano (Mbps):")
+        rotulo_plano.setStyleSheet(f"color: {Cor.TEXTO_SUAVE};")
+        self.acoes.addWidget(rotulo_plano)
+
+        self.campo_plano = QLineEdit()
+        self.campo_plano.setFixedWidth(70)
+        self.campo_plano.setPlaceholderText("300")
+        self.campo_plano.setToolTip(
+            "Velocidade contratada. Com ela o app compara o medido contra "
+            "os pisos que a Anatel exige.")
+        plano = nucleo_ficha.carregar().plano_mbps
+        if plano:
+            self.campo_plano.setText(f"{plano:.0f}")
+        self.campo_plano.editingFinished.connect(self._guardar_plano)
+        self.acoes.addWidget(self.campo_plano)
+
         self.acoes.addStretch(1)
 
         # Tabela e velocimetro lado a lado: a leitura ao vivo precisa
@@ -86,10 +113,16 @@ class PainelRede(PainelBase):
         for t in diagnostico.testes:
             item = QTreeWidgetItem(self.arvore,
                                    [SIMBOLOS.get(t.situacao, ""), t.rotulo, t.valor])
-            cor = QBrush(QColor(CORES.get(t.situacao, Cor.TEXTO)))
+            cor = QBrush(QColor(cores().get(t.situacao, Cor.TEXTO)))
             item.setForeground(0, cor)
             if t.situacao != "ok":
                 item.setForeground(2, cor)
+            # A camada que falhou explica o que a falha DELA isola. Sem
+            # isso o tecnico ve onde parou, mas nao o que ja pode excluir.
+            if t.isola:
+                filho = QTreeWidgetItem(item, ["", "", t.isola])
+                filho.setForeground(2, QBrush(QColor(Cor.TEXTO_SUAVE)))
+                item.setExpanded(True)
 
     def medir_velocidade(self) -> None:
         if self.ocupado:
@@ -103,6 +136,27 @@ class PainelRede(PainelBase):
             # que a assinatura pede, entao as outras seguem intactas.
             tarefa.sinais.medida.connect(self.velocimetro.definir_valor)
 
+    def _guardar_plano(self) -> None:
+        """Grava na ficha da maquina, para nao redigitar no reatendimento."""
+        try:
+            valor = float(self.campo_plano.text().strip().replace(",", "."))
+        except ValueError:
+            return
+        f = nucleo_ficha.carregar()
+        if f.plano_mbps == valor:
+            return
+        f.plano_mbps = valor
+        try:
+            nucleo_ficha.salvar(f)
+        except OSError:
+            pass
+
+    def _plano_atual(self) -> float:
+        try:
+            return float(self.campo_plano.text().strip().replace(",", "."))
+        except ValueError:
+            return 0.0
+
     def _velocidade_pronta(self, v) -> None:
         self.btn_velocidade.setEnabled(True)
 
@@ -113,6 +167,18 @@ class PainelRede(PainelBase):
             self.velocimetro.encerrar(
                 f"upload {v.upload_mbps:.0f} Mbps" if v.upload_mbps
                 else "concluído")
+
+        # Numero solto nao decide nada: 40 Mbps e otimo num plano de 50 e
+        # pessimo num de 500. Com o plano informado, vira veredito.
+        situacao, leitura = rede.avaliar_velocidade(
+            v.download_mbps, self._plano_atual())
+        if leitura:
+            item = QTreeWidgetItem(
+                self.arvore, [SIMBOLOS.get(situacao, ""),
+                              "Entrega do provedor", leitura])
+            cor = QBrush(QColor(cores().get(situacao, Cor.TEXTO)))
+            item.setForeground(0, cor)
+            item.setForeground(2, cor)
 
         if v.erro:
             item = QTreeWidgetItem(self.arvore, ["X", "Velocidade", v.erro])
@@ -129,7 +195,7 @@ class PainelRede(PainelBase):
             ("Latência", f"{v.latencia_ms:.0f} ms" if v.latencia_ms else "—", "ok"),
         ):
             item = QTreeWidgetItem(self.arvore, [SIMBOLOS.get(sit, ""), rotulo, valor])
-            cor = QBrush(QColor(CORES.get(sit, Cor.TEXTO)))
+            cor = QBrush(QColor(cores().get(sit, Cor.TEXTO)))
             item.setForeground(0, cor)
             if sit != "ok":
                 item.setForeground(2, cor)

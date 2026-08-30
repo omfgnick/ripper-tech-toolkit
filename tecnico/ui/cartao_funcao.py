@@ -24,7 +24,11 @@ class Ilustracao(QLabel):
         self._cor_halo: str | None = None
         self._nome = arquivo
         self._lado = lado
-        self.setFixedSize(lado + 28, lado + 28)
+        # Altura maior que a largura: a moldura e desenhada com folga
+        # embaixo para o titulo nunca encostar nela. Com folga igual dos
+        # quatro lados, em tela de DPI alto a fonte cresce, a moldura nao,
+        # e a linha passa por cima do texto.
+        self.setFixedSize(lado + 28, lado + 34)
         self.setAlignment(Qt.AlignCenter)
 
     def definir_halo(self, cor: str | None) -> None:
@@ -36,7 +40,7 @@ class Ilustracao(QLabel):
         p.setRenderHint(QPainter.Antialiasing, True)
 
         cor = self._cor_halo or Cor.DESTAQUE
-        area = QRectF(self.rect()).adjusted(6, 6, -6, -6)
+        area = QRectF(self.rect()).adjusted(6, 4, -6, -14)
 
         # Moldura fosca sempre; ela ganha a cor do estado so quando ha um.
         chanfro.pintar(p, area, None,
@@ -45,8 +49,11 @@ class Ilustracao(QLabel):
         if self._cor_halo:
             chanfro.marcar_cantos(p, area, cor, 2.0, 0.18)
 
-        icones.desenhar(self._nome, p, area.adjusted(16, 16, -16, -16), cor,
-                        espessura=2.4)
+        # Lucide primeiro; as formas desenhadas em codigo ficam como
+        # reserva para qualquer nome que nao tenha SVG correspondente.
+        alvo = area.adjusted(18, 18, -18, -18)
+        if not icones.desenhar_svg(self._nome, p, alvo, cor):
+            icones.desenhar(self._nome, p, alvo, cor, espessura=2.4)
         p.end()
 
 
@@ -55,7 +62,8 @@ class CartaoFuncao(QWidget):
 
     clicado = Signal(str)
 
-    def __init__(self, chave: str, titulo: str, arquivo: str, parent=None):
+    def __init__(self, chave: str, titulo: str, arquivo: str,
+                 legenda: str = "", parent=None):
         super().__init__(parent)
         self.chave = chave
         self._sob_mouse = False
@@ -71,6 +79,7 @@ class CartaoFuncao(QWidget):
 
         self.ilustracao = Ilustracao(arquivo)
         coluna.addWidget(self.ilustracao, 0, Qt.AlignHCenter)
+        coluna.addSpacing(2)
 
         self.rotulo = QLabel(titulo)
         self.rotulo.setAlignment(Qt.AlignCenter)
@@ -80,6 +89,17 @@ class CartaoFuncao(QWidget):
         self.rotulo.setFont(f)
         self.rotulo.setStyleSheet(f"color: {Cor.TEXTO}; background: transparent;")
         coluna.addWidget(self.rotulo)
+
+        # Legenda diz o que a tela FAZ. O titulo sozinho obriga a abrir
+        # para descobrir, e numa grade de dez isso custa tempo real.
+        if legenda:
+            self.legenda = QLabel(legenda)
+            self.legenda.setAlignment(Qt.AlignCenter)
+            self.legenda.setWordWrap(True)
+            self.legenda.setFont(QFont(familia(), 9))
+            self.legenda.setStyleSheet(
+                f"color: {Cor.TEXTO_FRACO}; background: transparent;")
+            coluna.addWidget(self.legenda)
 
         self.estado = QLabel("—")
         self.estado.setAlignment(Qt.AlignCenter)

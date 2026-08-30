@@ -107,3 +107,11 @@ class PainelReparo(PainelBase):
         for linha in saida.splitlines():
             if linha.strip():
                 self.anotar("  " + linha.strip())
+
+        # O veredito vem depois da saida crua, nao no lugar dela: o texto
+        # do comando continua util para quem sabe ler, e a conclusao serve
+        # para quem precisa do proximo passo agora.
+        situacao, explicacao = reparo.interpretar(saida)
+        if explicacao:
+            self.anotar("")
+            self.notificar(explicacao, "ok" if situacao == "ok" else "erro")

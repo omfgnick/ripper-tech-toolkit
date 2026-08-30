@@ -21,20 +21,35 @@ from ...tema import Cor, Fonte, familia
 from ..cartao_funcao import CartaoFuncao
 
 # (chave do cartao, titulo, arquivo da ilustracao, painel de destino)
+# (chave, titulo, icone Lucide, painel de destino, legenda)
+#
+# Um card por painel, sem duplicata e sem promessa errada: a versao
+# anterior tinha dois cards abrindo a mesma tela de Limpeza, e um chamado
+# "Restaurar Itens Padrao" que abria o painel de Reparo.
 FUNCOES = [
-    ("diagnostico", "Diagnóstico do Sistema", "monitor", "diagnostico"),
-    ("rede", "Verificação de Rede", "wifi", "rede"),
-    ("espaco", "Limpeza de Espaço", "lixeira", "limpeza"),
-    ("rastreio", "Limpeza de Rastros de Uso", "documento", "limpeza"),
-    ("desinstalar", "Desinstalação de Aplicativo", "pacote", "programas"),
-    ("manutencao", "Instalação e Backup", "seta_baixo", "manutencao"),
-    ("padrao", "Restaurar Itens Padrão", "engrenagem", "reparo"),
-    ("relatorios", "Relatórios e Otimizações", "grafico", "relatorios"),
+    ("roteiro", "Roteiro", "route", "roteiro",
+     "Executa o atendimento inteiro e termina no PDF"),
+    ("diagnostico", "Diagnóstico", "activity", "diagnostico",
+     "Lê o equipamento sem alterar nada"),
+    ("limpeza", "Limpeza", "trash-2", "limpeza",
+     "Mostra o que ocupa espaço antes de apagar"),
+    ("rede", "Rede", "wifi", "rede",
+     "Testa a conexão em camadas e mede a velocidade"),
+    ("programas", "Programas", "package", "programas",
+     "Instalados, inicialização e o que se esconde"),
+    ("reparo", "Reparo", "wrench", "reparo",
+     "SFC, DISM e CHKDSK, com ponto de restauração antes"),
+    ("manutencao", "Manutenção", "hard-drive-download", "manutencao",
+     "Instala em lote, salva drivers e copia o perfil"),
+    ("relatorios", "Relatórios", "chart-column", "relatorios",
+     "Junta tudo e aponta o que merece ação"),
+    ("entrega", "Entrega", "clipboard-check", "entrega",
+     "Confere item a item antes de devolver"),
+    ("historico", "Histórico", "file-clock", "historico",
+     "O que já passou por esta bancada"),
 ]
 
-# Oito funcoes em duas fileiras de quatro. O numero por linha existe para
-# que toda fileira feche completa: uma sobra deixa a grade torta.
-POR_LINHA = 4
+POR_LINHA = 5
 
 
 class PainelInicio(QWidget):
@@ -81,8 +96,9 @@ class PainelInicio(QWidget):
         self.cartoes: dict[str, CartaoFuncao] = {}
         self._destinos: dict[str, str] = {}
 
-        for i, (chave, rotulo, arquivo, destino) in enumerate(FUNCOES):
-            cartao = CartaoFuncao(chave, rotulo, arquivo)
+        for i, (chave, rotulo, arquivo, destino, legenda) in enumerate(
+                FUNCOES):
+            cartao = CartaoFuncao(chave, rotulo, arquivo, legenda)
             cartao.clicado.connect(self._abrir)
             grade.addWidget(cartao, i // POR_LINHA, i % POR_LINHA)
             self.cartoes[chave] = cartao
@@ -114,7 +130,7 @@ class PainelInicio(QWidget):
         Abrir o app nao pode alterar nada na maquina do cliente antes de
         alguem pedir.
         """
-        for chave in ("rede", "espaco", "rastreio"):
+        for chave in ("rede", "limpeza"):
             self.cartoes[chave].definir_estado(
                 "verificando...", Cor.DESTAQUE, Cor.DESTAQUE)
 
@@ -127,7 +143,7 @@ class PainelInicio(QWidget):
         t_limpeza = executar(nucleo_limpeza.varrer)
         t_limpeza.sinais.concluido.connect(self._limpeza_pronta)
         t_limpeza.sinais.falhou.connect(
-            lambda _e: self.cartoes["espaco"].definir_estado(
+            lambda _e: self.cartoes["limpeza"].definir_estado(
                 "falhou", Cor.ERRO, Cor.ERRO))
 
     def _rede_pronta(self, diagnostico) -> None:
@@ -141,21 +157,18 @@ class PainelInicio(QWidget):
 
     def _limpeza_pronta(self, achados) -> None:
         total = sum(a.bytes_total for a in achados)
-        rastros = sum(a.bytes_total for a in achados if a.chave == "rastros")
 
+        # A grade antiga tinha dois cards para a mesma tela - um de espaco
+        # e um de rastros. Agora e um so, e o total ja inclui os rastros.
+        #
         # Abaixo de 100 MB nao vale chamar o tecnico para limpar: o rotulo
         # diz "sem excesso" em vez de exibir um numero irrelevante.
         if total < 100 * 1024 * 1024:
-            self.cartoes["espaco"].definir_estado("Sem excesso", Cor.OK, Cor.OK)
+            self.cartoes["limpeza"].definir_estado(
+                "Sem excesso", Cor.OK, Cor.OK)
         else:
-            self.cartoes["espaco"].definir_estado(
+            self.cartoes["limpeza"].definir_estado(
                 formatar_bytes(total), Cor.ATENCAO, Cor.ATENCAO)
-
-        if rastros:
-            self.cartoes["rastreio"].definir_estado(
-                formatar_bytes(rastros), Cor.TEXTO_SUAVE, None)
-        else:
-            self.cartoes["rastreio"].definir_estado("Limpo", Cor.OK, Cor.OK)
 
         self._concluir()
 

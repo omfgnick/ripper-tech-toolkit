@@ -130,18 +130,26 @@ class Botao(QPushButton):
     ela perde a cara mecanica.
     """
 
-    ESTILOS = {
-        # tipo: (fundo, borda, texto, fundo ao passar o mouse)
-        "primario": (Cor.DESTAQUE, Cor.DESTAQUE, Cor.SOBRE_DESTAQUE,
-                     Cor.DESTAQUE_FORTE),
-        "perigo": (None, Cor.ERRO, Cor.ERRO, "#2a0410"),
-        "normal": (None, Cor.BORDA, Cor.TEXTO, Cor.PAINEL_ALTO),
-    }
+    def _estilo(self) -> tuple:
+        """(fundo, borda, texto, realce) da paleta ATIVA.
+
+        Metodo e nao atributo de classe: o dicionario no corpo da classe e
+        avaliado uma vez, na importacao, e ficava preso a paleta daquele
+        instante. No tema claro o texto continuava branco e o botao saia
+        vazio na tela.
+        """
+        return {
+            "primario": (Cor.DESTAQUE_BLOCO, Cor.DESTAQUE_BLOCO,
+                         Cor.SOBRE_DESTAQUE, Cor.DESTAQUE_FORTE),
+            "perigo": (None, Cor.ERRO, Cor.ERRO, Cor.PAINEL_ALTO),
+            "normal": (None, Cor.BORDA, Cor.TEXTO, Cor.PAINEL_ALTO),
+        }[self.tipo]
 
     def __init__(self, texto: str, tipo: str = "normal",
                  parent: QWidget | None = None):
         super().__init__(texto.upper(), parent)
-        self.tipo = tipo if tipo in self.ESTILOS else "normal"
+        self.tipo = tipo if tipo in ("primario", "perigo",
+                                     "normal") else "normal"
         self._sob_o_mouse = False
         self.setCursor(QCursor(Qt.PointingHandCursor))
         self.setMinimumHeight(34)
@@ -169,7 +177,7 @@ class Botao(QPushButton):
         return base
 
     def paintEvent(self, evento) -> None:  # noqa: N802
-        fundo, borda, texto, realce = self.ESTILOS[self.tipo]
+        fundo, borda, texto, realce = self._estilo()
         if not self.isEnabled():
             fundo, borda, texto = None, Cor.BORDA_SUAVE, Cor.TEXTO_FRACO
         elif self._sob_o_mouse:

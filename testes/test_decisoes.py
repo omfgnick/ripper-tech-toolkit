@@ -342,3 +342,229 @@ class TestOrdemDoRoteiro(unittest.TestCase):
         for e in roteiro.etapas():
             if e.altera:
                 self.assertFalse(e.marcada, f"{e.chave} vem marcada")
+
+
+class TestOrdemDosCamposPublicos(unittest.TestCase):
+    """Campo novo no meio de uma dataclass remapeia todo construtor
+    posicional, e em silencio. Aconteceu de verdade com Servico: `faz` e
+    `risco` entraram antes de `estado` e o app passou a ler o estado do
+    servico no campo errado, sem erro nenhum."""
+
+    def test_servico_mantem_a_ordem_posicional(self):
+        s = seguranca.Servico("wuauserv", "Windows Update", "Stopped",
+                              "Automatic")
+        self.assertEqual(s.estado, "Stopped")
+        self.assertEqual(s.inicializacao, "Automatic")
+        self.assertTrue(s.suspeito)
+
+    def test_dispositivo_mantem_a_ordem_posicional(self):
+        d = saude.Dispositivo("Placa X", "Net", "Error", "Código 28")
+        self.assertEqual(d.classe, "Net")
+        self.assertEqual(d.situacao, "Error")
+        self.assertEqual(d.problema, "Código 28")
+
+    def test_teste_de_rede_mantem_a_ordem_posicional(self):
+        from tecnico.nucleo import rede
+
+        t = rede.Teste("Gateway", "sem resposta", "erro")
+        self.assertEqual(t.situacao, "erro")
+        self.assertEqual(t.isola, "")
+
+
+class TestOrientacaoDeDispositivo(unittest.TestCase):
+    def test_codigo_28_manda_para_a_restauracao_de_drivers(self):
+        _titulo, resolver = saude.PROBLEMAS_DE_DISPOSITIVO[28]
+        self.assertIn("driver", resolver.lower())
+
+    def test_codigo_43_aponta_a_peca_e_nao_o_software(self):
+        titulo, resolver = saude.PROBLEMAS_DE_DISPOSITIVO[43]
+        self.assertIn("hardware", titulo.lower())
+        self.assertIn("PEÇA", resolver)
+
+    def test_codigo_45_nao_e_tratado_como_defeito(self):
+        _titulo, resolver = saude.PROBLEMAS_DE_DISPOSITIVO[45]
+        self.assertIn("não é defeito", resolver.lower())
+
+
+class TestEntregaDoProvedor(unittest.TestCase):
+    """Os pisos da Anatel: 80% de média mensal, 40% instantâneo."""
+
+    def avaliar(self, medido, plano):
+        from tecnico.nucleo import rede
+
+        return rede.avaliar_velocidade(medido, plano)[0]
+
+    def test_dentro_do_piso_medio(self):
+        self.assertEqual(self.avaliar(85, 100), "ok")
+
+    def test_entre_os_dois_pisos_pede_mais_medicoes(self):
+        self.assertEqual(self.avaliar(55, 100), "atencao")
+
+    def test_abaixo_do_piso_instantaneo(self):
+        self.assertEqual(self.avaliar(30, 100), "erro")
+
+    def test_sem_plano_informado_nao_opina(self):
+        self.assertEqual(self.avaliar(94, 0), "")
+
+
+class TestExtensoesDeRisco(unittest.TestCase):
+    def test_cashback_e_sinalizado(self):
+        categoria, _motivo = persistencia.classificar("Cashback Assistant")
+        self.assertEqual(categoria, "Cashback e cupom")
+
+    def test_sequestro_de_busca_e_sinalizado(self):
+        categoria, _motivo = persistencia.classificar("Quick Search NewTab")
+        self.assertTrue(categoria)
+
+    def test_extensao_comum_nao_e_sinalizada(self):
+        for nome in ("LastPass: Free Password Manager", "AdGuard AdBlocker",
+                     "Google Docs Offline"):
+            self.assertEqual(persistencia.classificar(nome)[0], "", nome)
+
+
+class TestVereditoDeReparo(unittest.TestCase):
+    def test_sfc_que_reparou(self):
+        situacao, texto = reparo.interpretar(
+            "Windows Resource Protection found corrupt files and "
+            "successfully repaired them.")
+        self.assertEqual(situacao, "ok")
+        self.assertIn("Reinicie", texto)
+
+    def test_sfc_que_nao_conseguiu_manda_para_o_dism(self):
+        situacao, texto = reparo.interpretar(
+            "found corrupt files but was unable to fix some of them")
+        self.assertEqual(situacao, "erro")
+        self.assertIn("DISM", texto)
+
+    def test_saida_desconhecida_nao_inventa_veredito(self):
+        self.assertEqual(reparo.interpretar("texto qualquer"), ("", ""))
+
+
+class TestChavesDaTelaInicial(unittest.TestCase):
+    """Chave de card que nao existe mais derruba o app NA ABERTURA.
+
+    Aconteceu: a grade foi refeita, `espaco` e `rastreio` viraram
+    `limpeza`, e a verificacao inicial continuou pedindo as antigas. O
+    KeyError so aparecia ao abrir o executavel - nenhum teste tocava
+    nisso, e compilar nao acusa.
+    """
+
+    def chaves_da_grade(self) -> set[str]:
+        from tecnico.ui.paineis.inicio import FUNCOES
+
+        return {chave for chave, *_resto in FUNCOES}
+
+    def test_verificacao_inicial_so_usa_chaves_existentes(self):
+        import re
+        from pathlib import Path
+
+        from tecnico.ui.paineis import inicio
+
+        fonte = Path(inicio.__file__).read_text(encoding="utf-8")
+        usadas = set(re.findall(r'self\.cartoes\["([a-z_]+)"\]', fonte))
+        faltando = usadas - self.chaves_da_grade()
+        self.assertFalse(
+            faltando, f"cartoes[...] usa chave inexistente: {faltando}")
+
+    def test_todo_card_aponta_para_um_painel_de_verdade(self):
+        from tecnico.ui.paineis.inicio import FUNCOES
+
+        # Os destinos precisam bater com os painéis registrados na janela.
+        paineis = {"inicio", "roteiro", "diagnostico", "limpeza", "rede",
+                   "programas", "reparo", "manutencao", "relatorios",
+                   "entrega", "historico"}
+        for _chave, titulo, _icone, destino, _legenda in FUNCOES:
+            self.assertIn(destino, paineis, f"{titulo} aponta para {destino}")
+
+    def test_nao_ha_card_duplicado_nem_destino_repetido(self):
+        from tecnico.ui.paineis.inicio import FUNCOES
+
+        chaves = [c for c, *_ in FUNCOES]
+        destinos = [d for *_, d, _l in FUNCOES]
+        self.assertEqual(len(chaves), len(set(chaves)))
+        # Dois cards abrindo a mesma tela foi o defeito da grade anterior.
+        self.assertEqual(len(destinos), len(set(destinos)))
+
+
+class TestTrocaDeTema(unittest.TestCase):
+    """Cor lida na importação não acompanha a troca de paleta.
+
+    Um dicionário no topo do módulo, ou no corpo de uma classe, congela a
+    paleta ativa naquele instante. Foi assim que o texto do botão sumiu no
+    tema claro: `Botao.ESTILOS` guardava o branco do tema escuro.
+
+    Este teste varre a árvore com AST e falha se qualquer atribuição fora
+    de função voltar a ler `Cor.`.
+    """
+
+    def test_nenhuma_cor_e_capturada_na_importacao(self):
+        import ast
+        from pathlib import Path
+
+        raiz = Path(__file__).resolve().parent.parent / "tecnico"
+        suspeitos = []
+        for arquivo in raiz.rglob("*.py"):
+            try:
+                arvore = ast.parse(arquivo.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+            for no in ast.walk(arvore):
+                if not isinstance(no, (ast.ClassDef, ast.Module)):
+                    continue
+                for filho in no.body:
+                    if not isinstance(filho, (ast.Assign, ast.AnnAssign)):
+                        continue
+                    texto = ast.unparse(filho)
+                    # tema.py monta a própria classe Cor a partir das
+                    # paletas; é o único lugar onde isso é correto.
+                    if "Cor." in texto and arquivo.name != "tema.py":
+                        suspeitos.append(f"{arquivo.name}: {texto[:60]}")
+
+        self.assertEqual(
+            suspeitos, [],
+            "cor capturada na importação — não acompanha a troca de tema:\n"
+            + "\n".join(suspeitos))
+
+    def test_as_duas_paletas_definem_os_mesmos_tokens(self):
+        from tecnico.tema import CLARA, ESCURA
+
+        self.assertEqual(set(ESCURA), set(CLARA))
+
+    def test_amarelo_do_tema_claro_e_legivel_como_texto(self):
+        from tecnico.tema import CLARA
+
+        def luminancia(hexa):
+            hexa = hexa.lstrip("#")
+            canais = []
+            for i in (0, 2, 4):
+                c = int(hexa[i:i + 2], 16) / 255
+                canais.append(c / 12.92 if c <= 0.03928
+                              else ((c + 0.055) / 1.055) ** 2.4)
+            r, g, b = canais
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+        def razao(a, b):
+            la, lb = luminancia(a), luminancia(b)
+            return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+
+        # WCAG AA para texto normal. O #FCEE0A do tema escuro daria
+        # 1.00:1 aqui — invisível.
+        self.assertGreaterEqual(
+            razao(CLARA["DESTAQUE"], CLARA["FUNDO"]), 4.5)
+        # E o texto escuro sobre o bloco amarelo também precisa passar.
+        self.assertGreaterEqual(
+            razao(CLARA["SOBRE_DESTAQUE"], CLARA["DESTAQUE_BLOCO"]), 4.5)
+
+    def test_trocar_e_voltar_restaura_a_paleta(self):
+        from tecnico.tema import Cor, aplicar_tema, tema_atual
+
+        original = tema_atual()
+        try:
+            aplicar_tema("escuro")
+            escuro = Cor.FUNDO
+            aplicar_tema("claro")
+            self.assertNotEqual(Cor.FUNDO, escuro)
+            aplicar_tema("escuro")
+            self.assertEqual(Cor.FUNDO, escuro)
+        finally:
+            aplicar_tema(original)

@@ -164,3 +164,64 @@ def desenhar(nome: str, pintor: QPainter, destino: QRectF, cor: str,
         pintor.drawPath(forma)
     pintor.restore()
     return True
+
+
+# ---------------------------------------------------------------------
+# ICONES LUCIDE
+# ---------------------------------------------------------------------
+# Os SVG do Lucide usam stroke="currentColor" e nao tem preenchimento, o
+# que os torna recoloriveis: basta trocar a palavra pela cor desejada
+# antes de entregar ao renderizador. Foi a condicao para trocar os icones
+# desenhados por assets externos sem perder o sinal de estado.
+#
+# O linecap deles e "round"; aqui vira "square" e o linejoin vira "miter",
+# para casar com o vocabulario angular das molduras chanfradas. Sem essa
+# troca eles ficam macios demais no meio de tudo que e cortado a 45 graus.
+_cache: dict[tuple[str, str], bytes] = {}
+
+
+def _svg_colorido(nome: str, cor: str) -> bytes | None:
+    chave = (nome, cor)
+    if chave in _cache:
+        return _cache[chave]
+
+    from .. import recursos
+
+    caminho = recursos.icone_svg(nome)
+    try:
+        texto = caminho.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    texto = (texto.replace('stroke="currentColor"', f'stroke="{cor}"')
+                  .replace('stroke-linecap="round"', 'stroke-linecap="square"')
+                  .replace('stroke-linejoin="round"', 'stroke-linejoin="miter"'))
+    dados = texto.encode("utf-8")
+    _cache[chave] = dados
+    return dados
+
+
+def desenhar_svg(nome: str, pintor: QPainter, destino: QRectF,
+                 cor: str) -> bool:
+    """Desenha um icone Lucide. Devolve False se o arquivo nao existir."""
+    from PySide6.QtCore import QByteArray
+    from PySide6.QtSvg import QSvgRenderer
+
+    dados = _svg_colorido(nome, cor)
+    if dados is None:
+        return False
+
+    renderizador = QSvgRenderer(QByteArray(dados))
+    if not renderizador.isValid():
+        return False
+
+    pintor.save()
+    pintor.setRenderHint(QPainter.Antialiasing, True)
+    # Quadrado centrado: o viewBox do Lucide e 24x24, e esticar para um
+    # retangulo deformaria o traco.
+    lado = min(destino.width(), destino.height())
+    area = QRectF(destino.center().x() - lado / 2,
+                  destino.center().y() - lado / 2, lado, lado)
+    renderizador.render(pintor, area)
+    pintor.restore()
+    return True

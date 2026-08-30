@@ -110,12 +110,15 @@ class FaixaStatus(QWidget):
 class Aviso(QLabel):
     """Toast de canto. Some sozinho e nao rouba o foco."""
 
-    CORES = {"ok": Cor.OK, "atencao": Cor.ATENCAO, "erro": Cor.ERRO,
-             "info": Cor.DESTAQUE}
+    @staticmethod
+    def cores() -> dict[str, str]:
+        # Lido na hora: atributo de classe congela a paleta da importacao.
+        return {"ok": Cor.OK, "atencao": Cor.ATENCAO, "erro": Cor.ERRO,
+                "info": Cor.DESTAQUE}
 
     def __init__(self, texto: str, tipo: str, parent: QWidget):
         super().__init__(texto, parent)
-        self.tipo = tipo if tipo in self.CORES else "info"
+        self.tipo = tipo if tipo in self.cores() else "info"
         self.setWordWrap(True)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self.setMargin(0)
@@ -126,12 +129,12 @@ class Aviso(QLabel):
         fonte.setWeight(QFont.DemiBold)
         self.setFont(fonte)
         self.setStyleSheet(
-            f"color: {self.CORES[self.tipo]}; background: transparent;")
+            f"color: {self.cores()[self.tipo]}; background: transparent;")
         self.adjustSize()
 
     def paintEvent(self, evento) -> None:  # noqa: N802
         p = QPainter(self)
-        cor = self.CORES[self.tipo]
+        cor = self.cores()[self.tipo]
         chanfro.pintar(p, QRectF(self.rect()), Cor.PAINEL, cor, 1.0,
                        chanfro=10.0)
         # Barra cheia na esquerda: repete o cabecalho dos paineis e deixa
@@ -154,12 +157,26 @@ class Avisos:
         aviso.show()
         aviso.raise_()
         self._reposicionar()
-        QTimer.singleShot(DURACAO_TOAST, lambda: self._remover(aviso))
+
+        # Temporizador FILHO do proprio aviso, e nao singleShot solto: ao
+        # fechar a janela com um toast na tela, o singleShot disparava
+        # depois e tentava destruir um widget que o Qt ja tinha destruido,
+        # levantando "Internal C++ object already deleted". Sendo filho,
+        # ele morre junto e nao chega a disparar.
+        relogio = QTimer(aviso)
+        relogio.setSingleShot(True)
+        relogio.setInterval(DURACAO_TOAST)
+        relogio.timeout.connect(lambda: self._remover(aviso))
+        relogio.start()
 
     def _remover(self, aviso: Aviso) -> None:
         if aviso in self._ativos:
             self._ativos.remove(aviso)
-        aviso.deleteLater()
+        try:
+            aviso.deleteLater()
+        except RuntimeError:
+            # Ja destruido junto com a janela; nada a fazer.
+            pass
         self._reposicionar()
 
     def _reposicionar(self) -> None:

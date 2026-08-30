@@ -17,7 +17,12 @@ from ..testes import TesteDeTeclado, TesteDeTela
 from ..widgets import Botao
 from .base import PainelBase
 
-CORES = {"ok": Cor.OK, "atencao": Cor.ATENCAO, "erro": Cor.ERRO}
+# Funcao e nao constante: dicionario no topo do modulo congela as
+# cores da paleta ativa na IMPORTACAO, e a troca de tema depois
+# nao chega ate ele. Foi assim que o texto do botao sumiu no tema
+# claro - continuava branco.
+def cores() -> dict[str, str]:
+    return {"ok": Cor.OK, "atencao": Cor.ATENCAO, "erro": Cor.ERRO}
 
 
 class PainelEntrega(PainelBase):
@@ -77,8 +82,8 @@ class PainelEntrega(PainelBase):
             linha.setFlags(linha.flags() | Qt.ItemIsUserCheckable)
             linha.setCheckState(0, Qt.Checked if item.marcado else Qt.Unchecked)
             linha.setData(0, Qt.UserRole, item.chave)
-            if item.situacao in CORES:
-                linha.setForeground(1, QBrush(QColor(CORES[item.situacao])))
+            if item.situacao in cores():
+                linha.setForeground(1, QBrush(QColor(cores()[item.situacao])))
             elif not item.automatico:
                 linha.setForeground(1, QBrush(QColor(Cor.TEXTO_FRACO)))
         self.lista.blockSignals(False)

@@ -31,7 +31,12 @@ from ...tema import Cor, Fonte
 from ..widgets import Botao, colunas_mono, Cartao, Legenda, Titulo
 from .base import PainelBase
 
-CORES_GRAVIDADE = {"alta": Cor.ERRO, "media": Cor.ATENCAO, "baixa": Cor.OK}
+# Funcao e nao constante: dicionario no topo do modulo congela as
+# cores da paleta ativa na IMPORTACAO, e a troca de tema depois
+# nao chega ate ele. Foi assim que o texto do botao sumiu no tema
+# claro - continuava branco.
+def cores_gravidade() -> dict[str, str]:
+    return {"alta": Cor.ERRO, "media": Cor.ATENCAO, "baixa": Cor.OK}
 ROTULO_GRAVIDADE = {"alta": "PRIORIDADE", "media": "ATENÇÃO", "baixa": "OBSERVAÇÃO"}
 
 
@@ -143,7 +148,7 @@ class PainelRelatorios(PainelBase):
         marca = QLabel(ROTULO_GRAVIDADE[s.gravidade])
         marca.setFont(QFont(Fonte.MONO, 8))
         marca.setStyleSheet(
-            f"color: {CORES_GRAVIDADE[s.gravidade]}; background: transparent;"
+            f"color: {cores_gravidade()[s.gravidade]}; background: transparent;"
         )
         cabecalho.addWidget(marca)
         cabecalho.addWidget(Titulo(s.titulo), 1)

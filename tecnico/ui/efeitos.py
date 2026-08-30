@@ -98,6 +98,17 @@ class Sobreposicao(QWidget):
         if largura < 2 or altura < 2:
             return
 
+        # No tema claro a vinheta preta vira mancha oliva sobre o
+        # off-white, e o efeito que sugeria tela curva passa a sugerir
+        # sujeira. Sobre fundo claro a queda de luz nas quinas se imita
+        # com um cinza translucido, muito mais fraco.
+        from ..tema import tema_atual
+
+        claro = tema_atual() == "claro"
+        tinta = (90, 88, 80) if claro else (0, 0, 0)
+        teto = 30 if claro else ALPHA_VINHETA
+        meio = 12 if claro else 38
+
         centro = QPointF(largura / 2, altura / 2)
         # Raio pela diagonal: assim as quinas ficam no fim do gradiente e
         # escurecem mais que o meio das bordas, que e justamente o que
@@ -105,10 +116,10 @@ class Sobreposicao(QWidget):
         raio = ((largura / 2) ** 2 + (altura / 2) ** 2) ** 0.5
 
         gradiente = QRadialGradient(centro, raio)
-        gradiente.setColorAt(0.0, QColor(0, 0, 0, 0))
-        gradiente.setColorAt(0.62, QColor(0, 0, 0, 0))
-        gradiente.setColorAt(0.85, QColor(0, 0, 0, 38))
-        gradiente.setColorAt(1.0, QColor(0, 0, 0, ALPHA_VINHETA))
+        gradiente.setColorAt(0.0, QColor(*tinta, 0))
+        gradiente.setColorAt(0.62, QColor(*tinta, 0))
+        gradiente.setColorAt(0.85, QColor(*tinta, meio))
+        gradiente.setColorAt(1.0, QColor(*tinta, teto))
         pintor.fillRect(self.rect(), gradiente)
 
     def paintEvent(self, evento) -> None:  # noqa: N802
@@ -116,7 +127,12 @@ class Sobreposicao(QWidget):
 
         self._vinheta(pintor)
 
-        linha = QColor(0, 0, 0, ALPHA_SCANLINE)
+        # A scanline tambem afina no claro: no escuro ela some no fundo,
+        # no claro cada linha aparece como risco cinza sobre o texto.
+        from ..tema import tema_atual
+
+        alpha = 7 if tema_atual() == "claro" else ALPHA_SCANLINE
+        linha = QColor(0, 0, 0, alpha)
         for y in range(0, self.height(), PASSO_SCANLINE):
             pintor.fillRect(0, y, self.width(), 1, linha)
 

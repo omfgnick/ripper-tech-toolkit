@@ -13,9 +13,16 @@ from . import win
 
 @dataclass
 class Teste:
+    """Uma camada do diagnostico. `isola` diz o que a falha DAQUI aponta.
+
+    A leitura em camadas so vale se cada degrau explicar o que exclui: o
+    tecnico experiente sabe que gateway morto com IP valido nao e problema
+    do provedor, mas o app nao dizia isso em lugar nenhum.
+    """
     rotulo: str
     valor: str
     situacao: str = "ok"   # ok | atencao | erro
+    isola: str = ""
 
 
 @dataclass
@@ -114,6 +121,39 @@ def _configuracao_ip() -> tuple[str | None, list[str]]:
     return gw, [d for d in dns if d]
 
 
+
+# O que a falha de cada camada isola. Ordem do diagnostico: se uma camada
+# cai, as de baixo dela nem sao a causa.
+ISOLA = {
+    "Adaptador ativo":
+        "Nenhuma placa de rede ligada. Verifique o cabo na traseira, se o "
+        "Wi-Fi está ativado e se o adaptador aparece no Gerenciador de "
+        "Dispositivos. Nada abaixo disto funciona sem resolver primeiro.",
+    "Endereço IPv4":
+        "A placa está ligada mas não recebeu endereço. Endereço 169.254.x.x "
+        "significa que o DHCP não respondeu: cabo ruim, porta do switch ou "
+        "roteador travado. Reiniciar o roteador resolve a maioria.",
+    "Gateway":
+        "Sem rota para fora da máquina. O problema está entre ela e o "
+        "roteador — cabo, porta, ou o roteador desligado. Não é o provedor.",
+    "Resposta do gateway":
+        "O roteador não responde ao ping. Se o IP veio por DHCP, ele estava "
+        "vivo há pouco: costuma ser travamento do roteador ou Wi-Fi com "
+        "sinal fraco demais para manter a sessão.",
+    "Internet (1.1.1.1)":
+        "A rede local funciona e a saída não. Aqui sim o dedo aponta para o "
+        "provedor, ou para o roteador sem sincronizar. Confirme se outro "
+        "aparelho na mesma rede também está sem internet.",
+    "Servidor DNS":
+        "Sem servidor de nomes configurado. A máquina alcança endereços IP "
+        "mas não nomes de site — o sintoma clássico de 'a internet caiu' "
+        "com o WhatsApp funcionando.",
+    "Resolução de nomes":
+        "IP responde e nome não resolve. O servidor DNS está configurado mas "
+        "não responde, ou foi sequestrado por malware. Trocar para 1.1.1.1 "
+        "ou 8.8.8.8 confirma em segundos.",
+}
+
 def diagnosticar(relatar=lambda _: None, percentual=lambda _: None,
                  cancelado=lambda: False) -> Diagnostico:
     d = Diagnostico()
@@ -184,6 +224,12 @@ def diagnosticar(relatar=lambda _: None, percentual=lambda _: None,
     relatar("Diagnóstico de rede concluído.")
     percentual(100)
     d.saida_bruta = "\n".join(bruto)
+    # Preenchido no fim, e nao em cada Teste: assim a orientacao vive num
+    # catalogo unico e nao espalhada por sete pontos de construcao.
+    for t in d.testes:
+        if t.situacao in ("erro", "atencao"):
+            t.isola = ISOLA.get(t.rotulo, "")
+
     return d
 
 
@@ -374,3 +420,43 @@ def testar_velocidade(bytes_alvo: int = 25_000_000, relatar=lambda _: None,
     relatar(f"Download {v.download_mbps:.1f} Mbps · "
             f"Upload {v.upload_mbps:.1f} Mbps")
     return v
+
+
+# ---------------------------------------------------------------------
+# LEITURA DA VELOCIDADE
+# ---------------------------------------------------------------------
+# A Anatel exige, para banda larga fixa, media mensal de no minimo 80% da
+# velocidade contratada e instantanea de no minimo 40%. Sao esses os dois
+# numeros que decidem se o caso e reclamacao com o provedor ou problema na
+# casa do cliente - e sem eles o tecnico so tem um numero solto.
+PISO_MEDIO = 0.80
+PISO_INSTANTANEO = 0.40
+
+
+def avaliar_velocidade(medido: float, plano: float) -> tuple[str, str]:
+    """(situacao, leitura) do medido contra o plano contratado.
+
+    Uma medicao unica e instantanea, entao o piso que se aplica aqui e o
+    de 40%. Abaixo disso ha caso a levar ao provedor; entre 40% e 80% a
+    entrega esta fraca mas exige varias medicoes para reclamar.
+    """
+    if not plano or plano <= 0:
+        return "", ""
+
+    fracao = medido / plano
+    pct = fracao * 100
+
+    if fracao >= PISO_MEDIO:
+        return "ok", (f"{pct:.0f}% do plano de {plano:.0f} Mbps — dentro do "
+                      "que a Anatel exige de média mensal (80%).")
+    if fracao >= PISO_INSTANTANEO:
+        return "atencao", (
+            f"{pct:.0f}% do plano de {plano:.0f} Mbps — acima do piso "
+            "instantâneo de 40%, mas abaixo da média de 80% que a Anatel "
+            "exige. Meça em horários diferentes antes de acionar o "
+            "provedor; se cair de novo, há caso.")
+    return "erro", (
+        f"{pct:.0f}% do plano de {plano:.0f} Mbps — abaixo do piso "
+        "instantâneo de 40%. Confirme por cabo antes de reclamar: no "
+        "Wi-Fi a perda pode ser do ambiente, e aí o roteador é o "
+        "responsável, não o provedor.")

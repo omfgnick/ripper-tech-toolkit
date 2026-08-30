@@ -28,6 +28,10 @@ class Ficha:
     executado: str = ""        # o que o tecnico fez
     observacoes: str = ""
     tecnico: str = ""
+    # Velocidade contratada, em Mbps. Fica na ficha por ser dado do
+    # cliente, nao da maquina: o mesmo notebook em outra casa tem outro
+    # plano, e o numero precisa acompanhar quem paga a conta.
+    plano_mbps: float = 0.0
     abertura: str = field(default_factory=lambda: date.today().isoformat())
 
     @property

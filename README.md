@@ -195,6 +195,69 @@ desligada — o padrão em boa parte das máquinas de fábrica. O app compara o
 último ponto antes e depois; se não mudou, avisa que não há rede de
 segurança e segue mesmo assim, porque o técnico pediu o reparo.
 
+## Tema claro e escuro
+
+Botão na barra lateral, escolha gravada entre sessões.
+
+**O amarelo foi o ponto difícil.** `#FCEE0A` sobre fundo claro dá **1,00:1**
+de contraste — invisível. E nenhum tom único resolve: escurecer o bastante
+para ler como texto estraga o contraste do texto escuro quando ele vira
+preenchimento.
+
+Daí dois tokens. `DESTAQUE` escreve (`#7a6600`, 4,68:1 — passa em WCAG AA)
+e `DESTAQUE_BLOCO` preenche (`#f2dd00`, com texto escuro em 15:1). No tema
+escuro são a mesma cor. Um teste calcula os dois contrastes e falha se
+algum cair abaixo de 4,5:1.
+
+**Cor lida na importação não acompanha a troca.** Um dicionário no topo do
+módulo, ou no corpo de uma classe, congela a paleta daquele instante — foi
+assim que o texto do botão sumiu no tema claro. Um teste varre a árvore com
+AST e falha se qualquer atribuição fora de função voltar a ler `Cor.`.
+
+A troca **remonta a janela** e recusa fazê-lo com operação em andamento.
+Remontar em vez de repintar porque 49 lugares fixam cor em stylesheet no
+construtor, e religar todos custaria mais risco que reconstruir uma tela
+trocada uma vez por dia.
+
+## Área de notificação
+
+Fechar recolhe para a bandeja; sair de verdade é escolha explícita no menu
+do ícone. Não é só conveniência: numa bancada o app fica aberto entre um
+atendimento e outro, e reabrir a cada vez é uma chance de rodar duas cópias
+por engano.
+
+**Duas cópias são bloqueadas por mutex nomeado**, e a segunda traz a
+primeira para a frente em vez de só avisar — o técnico clicou duas vezes no
+ícone querendo o app, não uma caixa de diálogo. Só avisa se não encontrar a
+janela, porque aí o silêncio pareceria que nada aconteceu.
+
+## Teste de fumaça
+
+```bash
+python -m unittest discover -s testes
+```
+
+96 testes. Além das regras puras, um teste monta a interface inteira, abre
+os dez painéis e **chama todo método público sem argumento obrigatório**.
+A lista de exclusões é nominal — o que apaga, instala, repara, abre diálogo
+ou consome rede — então método novo entra no teste por padrão.
+
+Ele existe porque três travamentos chegaram ao uso real e nenhum aparecia
+ao compilar:
+
+| Erro | Causa |
+| --- | --- |
+| `KeyError: 'espaco'` | a grade foi refeita e a verificação inicial continuou pedindo a chave antiga |
+| `AttributeError: 'ocupado'` | o botão de tema assumiu que todo painel herda de `PainelBase` |
+| `Internal C++ object already deleted` | fechar a janela com um toast na tela fazia o temporizador disparar sobre um widget destruído |
+
+O terceiro foi encontrado **pelo próprio teste de fumaça**, na primeira
+execução, antes de chegar ao uso.
+
+Uma ressalva honesta: `alternar_tema` está fora da fumaça porque remonta a
+janela, então ele não teria pego o segundo erro. A checagem foi extraída
+para `paineis_ocupados()` justamente para poder ser testada sem remontar.
+
 ## Ordem de serviço
 
 A aba **Ficha**, em Relatórios, guarda cliente, telefone, equipamento,
@@ -545,7 +608,9 @@ tecnico/
     hud.py            faixa de status e notificações de canto
     abertura.py       sequência de boot
     testes.py         testes de tela e teclado em tela cheia
+    bandeja.py        ícone na área de notificação
 recursos/fontes/      Rajdhani (OFL) embutida no executável
+recursos/lucide/      ícones Lucide (ISC), recoloridos por estado
     manutencao.py     instalação em lote (winget) e backup de perfil
     historico.py      instantâneos, comparação antes/depois, histórico
     pdf.py            relatório em PDF

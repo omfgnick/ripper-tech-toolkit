@@ -17,8 +17,13 @@ from ...tema import Cor, Fonte
 from ..widgets import Botao, colunas_mono
 from .base import PainelBase
 
-CORES_SITUACAO = {"melhorou": Cor.OK, "piorou": Cor.ERRO,
-                  "neutro": Cor.TEXTO_SUAVE}
+# Funcao e nao constante: dicionario no topo do modulo congela as
+# cores da paleta ativa na IMPORTACAO, e a troca de tema depois
+# nao chega ate ele. Foi assim que o texto do botao sumiu no tema
+# claro - continuava branco.
+def cores_situacao() -> dict[str, str]:
+    return {"melhorou": Cor.OK, "piorou": Cor.ERRO,
+            "neutro": Cor.TEXTO_SUAVE}
 
 
 class PainelRoteiro(PainelBase):
@@ -139,7 +144,7 @@ class PainelRoteiro(PainelBase):
                     [m.rotulo, m.antes, m.depois, m.variacao or "sem mudança"])
                 item.setFont(2, negrito)
                 item.setForeground(
-                    3, QBrush(QColor(CORES_SITUACAO[m.situacao])))
+                    3, QBrush(QColor(cores_situacao()[m.situacao])))
             self.resultado.show()
 
         partes = [f"{len(r.concluidas)} etapa(s) concluída(s)"]

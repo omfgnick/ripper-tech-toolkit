@@ -217,12 +217,31 @@ def _seguranca() -> Grupo | None:
     if len(ativos) > 1:
         g.itens.append(Item(
             "Conflito de antivírus",
-            f"{len(ativos)} em tempo real ao mesmo tempo", "erro"))
+            f"{len(ativos)} em tempo real ao mesmo tempo: "
+            + ", ".join(a.nome for a in ativos), "erro"))
+        g.itens.append(Item(
+            "",
+            "Cada um intercepta a MESMA leitura de arquivo antes de "
+            "liberá-la, então todo acesso a disco passa por dois filtros. "
+            "Além de lentidão, um costuma marcar o outro como ameaça e "
+            "colocá-lo em quarentena — o resultado prático é a máquina "
+            "lenta E desprotegida."))
+        g.itens.append(Item(
+            "",
+            "Resolver: desinstale o de terceiros pelo painel de Programas. "
+            "O Defender reativa sozinho quando fica o único."))
 
     suspeitos = [s for s in q.servicos if s.suspeito]
     if suspeitos:
         for s in suspeitos:
             g.itens.append(Item(s.rotulo, s.motivo, "erro"))
+            # O que o servico faz e o que a ausencia dele custa. "wscsvc
+            # desabilitado" nao diz nada a quem nao decorou os nomes
+            # internos do Windows.
+            if s.faz:
+                g.itens.append(Item("", f"O que faz: {s.faz}"))
+            if s.risco:
+                g.itens.append(Item("", f"Consequência: {s.risco}"))
     else:
         g.itens.append(Item("Serviços essenciais",
                             f"{len(q.servicos)} conferidos, nenhum alterado"))

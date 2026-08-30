@@ -52,8 +52,11 @@ def _verificar() -> int:
 
     linhas.append("ICONES DA GRADE")
     linhas.append("-" * 52)
-    for _chave, rotulo, nome, _destino in FUNCOES:
-        existe = nome in icones.FORMAS
+    for _chave, rotulo, nome, _destino, _legenda in FUNCOES:
+        # Agora os icones sao SVG do Lucide; as formas em codigo
+        # ficaram como reserva.
+        existe = (recursos.icone_svg(nome).is_file()
+                  or nome in icones.FORMAS)
         if not existe:
             faltando += 1
         linhas.append(f"  {'OK   ' if existe else 'FALTA'} {rotulo:<30} {nome}")
@@ -79,6 +82,40 @@ def _verificar() -> int:
         faltando += 1
     linhas.append(f"  Registro no Qt            : {'ok' if registrou else 'FALHOU'}")
     linhas.append(f"  Familia em uso            : {familia}")
+
+    # HTTPS e o teste que pega falha de empacotamento do OpenSSL. Sem as
+    # DLLs, urllib nem reconhece o esquema e responde "unknown url type:
+    # https" - erro que so aparece quando o tecnico usa o teste de
+    # velocidade na frente do cliente.
+    linhas += ["", "REDE E CRIPTOGRAFIA", "-" * 52]
+    try:
+        import ssl
+
+        linhas.append(f"  OK    OpenSSL                 {ssl.OPENSSL_VERSION}")
+    except ImportError as erro:
+        faltando += 1
+        linhas.append(f"  FALTA modulo ssl              {erro}")
+
+    try:
+        import urllib.request
+
+        if hasattr(urllib.request, "HTTPSHandler"):
+            linhas.append("  OK    urllib com HTTPS")
+        else:
+            faltando += 1
+            linhas.append("  FALTA urllib sem handler de HTTPS")
+    except ImportError as erro:
+        faltando += 1
+        linhas.append(f"  FALTA urllib.request          {erro}")
+
+    linhas += ["", "ICONE DA JANELA", "-" * 52]
+    caminho_icone = recursos.icone_do_app()
+    existe_icone = caminho_icone.is_file()
+    if not existe_icone:
+        faltando += 1
+    linhas.append(f"  {'OK   ' if existe_icone else 'FALTA'} {caminho_icone}")
+
+    linhas += ["", f"Resultado: {'tudo certo' if not faltando else f'{faltando} problema(s)'}"]
 
     destino = Path(sys.executable).parent / "verificacao.txt"
     if not empacotado:

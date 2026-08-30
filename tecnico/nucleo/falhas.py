@@ -111,3 +111,38 @@ def instalar_excecoes(ao_falhar=None) -> None:
         anterior(tipo, valor, rastro)
 
     sys.excepthook = capturar
+
+
+# ---------------------------------------------------------------------
+# TRAZER A INSTANCIA EXISTENTE PARA A FRENTE
+# ---------------------------------------------------------------------
+SW_RESTORE = 9
+
+
+def focar_instancia_existente(titulo: str) -> bool:
+    """Restaura e traz para frente a janela da copia que ja roda.
+
+    Bloquear a segunda copia com um aviso resolve a corrupcao de dados,
+    mas deixa o tecnico procurando a janela - que pode estar recolhida na
+    bandeja. Trazer a existente para a frente e o que ele queria ao clicar
+    duas vezes no icone.
+
+    O SetForegroundWindow do Windows recusa o pedido quando quem chama nao
+    esta em primeiro plano. AllowSetForegroundWindow(ASFW_ANY) antes do
+    pedido e o que o proprio sistema documenta para este caso.
+    """
+    try:
+        import ctypes
+
+        u32 = ctypes.WinDLL("user32", use_last_error=True)
+        u32.FindWindowW.restype = ctypes.c_void_p
+        alca = u32.FindWindowW(None, ctypes.c_wchar_p(titulo))
+        if not alca:
+            return False
+
+        u32.AllowSetForegroundWindow(-1)      # ASFW_ANY
+        u32.ShowWindow(ctypes.c_void_p(alca), SW_RESTORE)
+        u32.SetForegroundWindow(ctypes.c_void_p(alca))
+        return True
+    except (AttributeError, OSError):
+        return False

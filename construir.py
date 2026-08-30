@@ -60,6 +60,27 @@ def main() -> int:
     # abre na maquina do cliente com a plataforma vazia - e o localizador
     # em tecnico/recursos.py cuida de achar a pasta extraida em tempo de
     # execucao.
+    # O modulo `ssl` e importado dentro das funcoes de rede.py, e a analise
+    # estatica do PyInstaller nao enxerga import dentro de funcao. Sem estes
+    # dois, o executavel sai sem as DLLs do OpenSSL e o urllib responde
+    # "unknown url type: https" - a mesma classe de falha silenciosa do
+    # import relativo em __main__.py.
+    comando += ["--hidden-import", "ssl",
+                "--hidden-import", "urllib.request",
+                "--collect-binaries", "_ssl"]
+
+    icone_janela = RAIZ / "recursos" / "app.ico"
+    if icone_janela.is_file():
+        # --icon define o icone do ARQUIVO .exe. O icone da JANELA e da barra
+        # de tarefas vem de setWindowIcon, que precisa do arquivo em disco.
+        comando += ["--add-data",
+                    f"{icone_janela}{os.pathsep}recursos"]
+
+    lucide = RAIZ / "recursos" / "lucide"
+    if lucide.is_dir():
+        comando += ["--add-data",
+                    f"{lucide}{os.pathsep}recursos/lucide"]
+
     fontes = RAIZ / "recursos" / "fontes"
     if fontes.is_dir():
         # Sem as fontes empacotadas o Qt cai num substituto e a interface

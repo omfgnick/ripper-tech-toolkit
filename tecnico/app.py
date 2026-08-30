@@ -7,8 +7,9 @@ import sys
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
+from . import recursos
 from .nucleo import falhas
-from .tema import registrar_fontes
+from .tema import aplicar_tema, registrar_fontes, tema_gravado
 from .ui.janela import APLICATIVO, Janela
 
 
@@ -20,20 +21,39 @@ def main() -> int:
     app.setApplicationName(APLICATIVO)
     app.setStyle("Fusion")
 
+    # Sem isto a janela e a barra de tarefas ficam com o icone generico do
+    # Qt: --icon do PyInstaller decora so o arquivo .exe.
+    caminho_icone = recursos.icone_do_app()
+    if caminho_icone.is_file():
+        from PySide6.QtGui import QIcon
+
+        app.setWindowIcon(QIcon(str(caminho_icone)))
+
     # Antes de qualquer janela: duas instancias gravam historico e ficha
     # uma por cima da outra, e nenhuma das duas percebe.
     if not falhas.instancia_unica():
+        # Trazer a existente para a frente e sair calado: o tecnico clicou
+        # duas vezes no icone querendo o app, nao um aviso. So avisa se
+        # nao achar a janela - ai o silencio pareceria que nada aconteceu.
+        from .ui.janela import VERSAO
+
+        if falhas.focar_instancia_existente(f"{APLICATIVO} {VERSAO}"):
+            return 0
+
         from PySide6.QtWidgets import QMessageBox
 
         QMessageBox.warning(
             None, APLICATIVO,
             f"O {APLICATIVO} já está aberto." + chr(10) + chr(10)
             + "Duas cópias gravariam o histórico e a ficha desta máquina "
-            "uma por cima da outra. Use a janela que já está aberta.")
+            "uma por cima da outra. Procure a janela ou o ícone na área "
+            "de notificação.")
         return 0
 
     # Antes de qualquer widget: a folha de estilo consulta a familia
     # carregada, e widget criado antes ficaria com a fonte errada.
+    aplicar_tema(tema_gravado())
+
     if not registrar_fontes():
         print("aviso: Rajdhani nao encontrada, usando fonte do sistema",
               file=sys.stderr)

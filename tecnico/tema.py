@@ -22,37 +22,131 @@ LINGUAGEM VISUAL: CYBERPUNK 2077
 from __future__ import annotations
 
 
+# Duas paletas. O amarelo e o ponto dificil: #FCEE0A sobre fundo claro da
+# 1.00:1 de contraste - literalmente invisivel. Nenhum tom unico resolve,
+# porque escurecer o bastante para ler como TEXTO estraga o contraste do
+# texto escuro sobre ele quando vira PREENCHIMENTO.
+#
+# Por isso dois tokens: DESTAQUE escreve, DESTAQUE_BLOCO preenche. No tema
+# escuro sao a mesma cor; no claro, o bloco continua vibrante e o texto
+# desce para um dourado que passa em WCAG AA (4.68:1).
+ESCURA = {
+    "FUNDO": "#08080a",
+    "FUNDO_ALTO": "#0e0e12",
+    "PAINEL": "#121218",
+    "PAINEL_ALTO": "#1a1a22",
+    "BORDA": "#2e2e38",
+    "BORDA_SUAVE": "#1e1e26",
+    "TEXTO": "#e8e8ec",
+    "TEXTO_SUAVE": "#8f8f9c",
+    "TEXTO_FRACO": "#5f5f6c",
+    "OK": "#00f0ff",
+    "ATENCAO": "#ff9f1c",
+    "ERRO": "#ff003c",
+    "NEUTRO": "#5f5f6c",
+    "DESTAQUE": "#fcee0a",
+    "DESTAQUE_BLOCO": "#fcee0a",
+    "DESTAQUE_FORTE": "#ffff66",
+    "DESTAQUE_FOSCO": "#6b6608",
+    "SOBRE_DESTAQUE": "#0a0a06",
+}
+
+CLARA = {
+    # Nada de branco puro: bancada costuma ter luz forte, e branco 100%
+    # cansa mais que um off-white levemente quente.
+    "FUNDO": "#eceae4",
+    "FUNDO_ALTO": "#f5f3ee",
+    "PAINEL": "#ffffff",
+    "PAINEL_ALTO": "#e2dfd6",
+    "BORDA": "#c4c0b2",
+    "BORDA_SUAVE": "#dbd7cb",
+    "TEXTO": "#14140f",
+    "TEXTO_SUAVE": "#55524a",
+    "TEXTO_FRACO": "#807c72",
+    # A escala de alerta tambem escurece: ciano e vermelho vibrantes somem
+    # sobre claro pelo mesmo motivo do amarelo.
+    "OK": "#00707f",
+    "ATENCAO": "#9c5200",
+    "ERRO": "#c2001f",
+    "NEUTRO": "#807c72",
+    "DESTAQUE": "#7a6600",
+    "DESTAQUE_BLOCO": "#f2dd00",
+    "DESTAQUE_FORTE": "#5c4d00",
+    "DESTAQUE_FOSCO": "#cfc79a",
+    "SOBRE_DESTAQUE": "#14140f",
+}
+
+TEMAS = {"escuro": ESCURA, "claro": CLARA}
+_atual = "escuro"
+
+
 class Cor:
-    """Cada valor tem uma funcao e um lugar onde nao deve aparecer."""
+    """Cada valor tem uma funcao e um lugar onde nao deve aparecer.
 
-    # Fundos, do mais profundo ao mais claro. Preto de verdade e duro na
-    # vista por horas; #08080a tem um azul minimo que descansa.
-    FUNDO = "#08080a"
-    FUNDO_ALTO = "#0e0e12"
-    PAINEL = "#121218"
-    PAINEL_ALTO = "#1a1a22"
-    BORDA = "#2e2e38"
-    BORDA_SUAVE = "#1e1e26"
+    Os atributos sao reescritos por `aplicar_tema`. Tudo que le `Cor.X` na
+    hora de pintar acompanha a troca sozinho; o que fixou a cor num
+    stylesheet no construtor precisa ser reconstruido.
+    """
 
-    # Texto - nunca usar TEXTO_FRACO em leitura longa
-    TEXTO = "#e8e8ec"
-    TEXTO_SUAVE = "#8f8f9c"
-    TEXTO_FRACO = "#5f5f6c"
+    FUNDO = ESCURA["FUNDO"]
+    FUNDO_ALTO = ESCURA["FUNDO_ALTO"]
+    PAINEL = ESCURA["PAINEL"]
+    PAINEL_ALTO = ESCURA["PAINEL_ALTO"]
+    BORDA = ESCURA["BORDA"]
+    BORDA_SUAVE = ESCURA["BORDA_SUAVE"]
 
-    # Escala de alerta. Nao inclui amarelo de proposito: ver o cabecalho.
-    OK = "#00f0ff"
-    ATENCAO = "#ff9f1c"
-    ERRO = "#ff003c"
-    NEUTRO = "#5f5f6c"
+    TEXTO = ESCURA["TEXTO"]
+    TEXTO_SUAVE = ESCURA["TEXTO_SUAVE"]
+    TEXTO_FRACO = ESCURA["TEXTO_FRACO"]
 
-    # A cor do aplicativo: selecao, foco, moldura ativa, cabecalho.
-    DESTAQUE = "#fcee0a"
-    DESTAQUE_FORTE = "#ffff66"
-    # Amarelo apagado para moldura inativa - mantem a forma sem gritar.
-    DESTAQUE_FOSCO = "#6b6608"
-    # Texto sobre bloco amarelo solido. Preto puro vibra sobre amarelo
-    # saturado; um cinza muito escuro assenta melhor.
-    SOBRE_DESTAQUE = "#0a0a06"
+    OK = ESCURA["OK"]
+    ATENCAO = ESCURA["ATENCAO"]
+    ERRO = ESCURA["ERRO"]
+    NEUTRO = ESCURA["NEUTRO"]
+
+    DESTAQUE = ESCURA["DESTAQUE"]
+    DESTAQUE_BLOCO = ESCURA["DESTAQUE_BLOCO"]
+    DESTAQUE_FORTE = ESCURA["DESTAQUE_FORTE"]
+    DESTAQUE_FOSCO = ESCURA["DESTAQUE_FOSCO"]
+    SOBRE_DESTAQUE = ESCURA["SOBRE_DESTAQUE"]
+
+
+def tema_atual() -> str:
+    return _atual
+
+
+def aplicar_tema(nome: str) -> str:
+    """Troca a paleta. Devolve o nome aplicado."""
+    global _atual
+
+    paleta = TEMAS.get(nome)
+    if paleta is None:
+        return _atual
+    for chave, valor in paleta.items():
+        setattr(Cor, chave, valor)
+    _atual = nome
+    return _atual
+
+
+def tema_gravado() -> str:
+    """O tema escolhido da ultima vez, ou o escuro."""
+    from .nucleo import dados
+
+    try:
+        texto = (dados.base() / "tema.txt").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "escuro"
+    return texto if texto in TEMAS else "escuro"
+
+
+def gravar_tema(nome: str) -> None:
+    from .nucleo import dados
+
+    try:
+        (dados.base() / "tema.txt").write_text(nome, encoding="utf-8")
+    except OSError:
+        # Preferencia visual nao pode impedir o atendimento.
+        pass
 
 
 class Fonte:
@@ -139,7 +233,7 @@ def folha_de_estilo() -> str:
         background: {Cor.FUNDO_ALTO};
         border: 1px solid {Cor.BORDA};
         border-radius: 0px;
-        selection-background-color: {Cor.DESTAQUE};
+        selection-background-color: {Cor.DESTAQUE_BLOCO};
         selection-color: {Cor.SOBRE_DESTAQUE};
     }}
 
@@ -162,7 +256,7 @@ def folha_de_estilo() -> str:
     /* Selecao invertida: bloco amarelo solido com texto preto. E a marca
        registrada do menu do jogo e o unico lugar onde o fundo e claro. */
     QTreeWidget::item:selected {{
-        background: {Cor.DESTAQUE};
+        background: {Cor.DESTAQUE_BLOCO};
         color: {Cor.SOBRE_DESTAQUE};
     }}
     QTreeWidget::item:hover {{
@@ -185,7 +279,7 @@ def folha_de_estilo() -> str:
         border-radius: 0px;
     }}
     QProgressBar::chunk {{
-        background: {Cor.DESTAQUE};
+        background: {Cor.DESTAQUE_BLOCO};
     }}
 
     QScrollBar:vertical {{
@@ -226,8 +320,8 @@ def folha_de_estilo() -> str:
         background: {Cor.FUNDO};
     }}
     QCheckBox::indicator:checked, QTreeWidget::indicator:checked {{
-        background: {Cor.DESTAQUE};
-        border: 1px solid {Cor.DESTAQUE};
+        background: {Cor.DESTAQUE_BLOCO};
+        border: 1px solid {Cor.DESTAQUE_BLOCO};
     }}
 
     QMessageBox {{

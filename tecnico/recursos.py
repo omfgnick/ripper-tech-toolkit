@@ -50,3 +50,13 @@ def fontes() -> list[Path]:
     if not pasta.is_dir():
         return []
     return sorted(pasta.glob("*.ttf"))
+
+
+def icone_do_app() -> Path:
+    """O .ico do aplicativo, para a janela e a barra de tarefas."""
+    return raiz() / "recursos" / "app.ico"
+
+
+def icone_svg(nome: str) -> Path:
+    """Caminho de um icone Lucide embutido."""
+    return raiz() / "recursos" / "lucide" / f"{nome}.svg"

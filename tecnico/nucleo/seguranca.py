@@ -24,17 +24,49 @@ from . import win
 
 # Servicos que, parados, indicam problema. Nome interno e o que o Windows
 # usa; o rotulo e nosso, porque o DisplayName vem traduzido e muda.
+# nome interno: (rotulo, o que faz, o que significa estar parado)
+#
+# O nome interno e o que o Windows usa; o DisplayName vem traduzido e muda
+# entre versoes. O terceiro campo e o que faltava: "wscsvc desabilitado"
+# nao diz nada, "malware costuma desligar este para esconder que o
+# antivirus sumiu" diz tudo.
 ESSENCIAIS = {
-    "wuauserv": "Windows Update",
-    "bits": "Transferência inteligente (BITS)",
-    "WinDefend": "Microsoft Defender",
-    "wscsvc": "Central de Segurança",
-    "Audiosrv": "Áudio do Windows",
-    "Spooler": "Spooler de impressão",
-    "Dhcp": "Cliente DHCP",
-    "Dnscache": "Cliente DNS",
-    "EventLog": "Log de eventos",
-    "Themes": "Temas",
+    "wuauserv": ("Windows Update",
+                 "baixa e instala as atualizações de segurança",
+                 "a máquina para de receber correção de falha crítica; "
+                 "desligar isto é a assinatura de quem quer manter uma "
+                 "brecha aberta"),
+    "bits": ("Transferência inteligente (BITS)",
+             "faz os downloads em segundo plano do Update e da Store",
+             "o Windows Update fica travado em 0% sem explicar por quê"),
+    "WinDefend": ("Microsoft Defender",
+                  "é o antivírus do Windows",
+                  "a máquina fica sem proteção em tempo real; se não há "
+                  "outro antivírus instalado, está desprotegida agora"),
+    "wscsvc": ("Central de Segurança",
+               "monitora antivírus, firewall e atualizações",
+               "some o aviso de que a proteção caiu — malware desliga este "
+               "justamente para o usuário não perceber"),
+    "Audiosrv": ("Áudio do Windows",
+                 "processa todo o som do sistema",
+                 "nenhum som sai, e o ícone de volume aparece com um X"),
+    "Spooler": ("Spooler de impressão",
+                "enfileira os trabalhos até a impressora aceitar",
+                "nada imprime, e as impressoras somem das configurações"),
+    "Dhcp": ("Cliente DHCP",
+             "pede o endereço IP ao roteador",
+             "a máquina não recebe IP e cai em 169.254.x.x, sem rede"),
+    "Dnscache": ("Cliente DNS",
+                 "guarda a tradução de nome para IP",
+                 "navegação lenta e sites que não abrem por nome"),
+    "EventLog": ("Log de eventos",
+                 "registra falhas do sistema",
+                 "o diagnóstico de falhas fica cego — sem histórico de tela "
+                 "azul, desligamento ou erro de disco"),
+    "Themes": ("Temas",
+               "desenha a aparência das janelas",
+               "a interface volta ao visual básico e alguns programas "
+               "ficam com desenho quebrado"),
 }
 
 
@@ -52,6 +84,11 @@ class Servico:
     rotulo: str
     estado: str = ""
     inicializacao: str = ""
+    # Campos novos vao no FIM de proposito: inseri-los no meio remapeia
+    # todo construtor posicional em silencio. A suite pegou justamente
+    # isso quando tentei coloca-los antes de `estado`.
+    faz: str = ""
+    risco: str = ""
 
     @property
     def parado(self) -> bool:
@@ -148,7 +185,7 @@ def servicos(relatar=lambda _: None) -> list[Servico]:
         por_nome[(d.get("Name") or "").lower()] = d
 
     lista = []
-    for chave, rotulo in ESSENCIAIS.items():
+    for chave, (rotulo, faz, risco) in ESSENCIAIS.items():
         d = por_nome.get(chave.lower())
         if d is None:
             continue
@@ -159,8 +196,9 @@ def servicos(relatar=lambda _: None) -> list[Servico]:
         estado = {1: "Stopped", 4: "Running"}.get(estado, estado)
         inicio = d.get("StartType")
         inicio = {2: "Automatic", 3: "Manual", 4: "Disabled"}.get(inicio, inicio)
-        lista.append(Servico(chave, rotulo, str(estado or ""),
-                             str(inicio or "")))
+        lista.append(Servico(chave, rotulo, faz=faz, risco=risco,
+                             estado=str(estado or ""),
+                             inicializacao=str(inicio or "")))
     return lista
 
 
