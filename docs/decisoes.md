@@ -1,13 +1,13 @@
 # Decisões de projeto
 
-[← README](../README.pt-BR.md)
+[← README](../README.md)
 
 Este documento guarda o porquê das escolhas não óbvias do Ripper: o que
 foi tentado, o que quebrou, e por que a solução ficou como está. Boa
 parte veio de erro cometido e corrigido contra máquina real — está
 escrito aqui para não se repetir.
 
-A página do repositório é o [README](../README.pt-BR.md); aqui não há
+A página do repositório é o [README](../README.md); aqui não há
 instrução de uso, só raciocínio.
 
 ## Rodar do código
