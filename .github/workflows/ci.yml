@@ -70,10 +70,8 @@ jobs:
           # subsistema grafico, entao o PowerShell nao espera por ele e le
           # $LASTEXITCODE antes de o processo terminar. Na primeira versao
           # o passo falhava enquanto a saida dizia "tudo certo".
-          $p = Start-Process -FilePath ".\dist\Ripper.exe" `
-                             -ArgumentList "--verificar" `
-                             -NoNewWindow -Wait -PassThru
-          Get-Content .\disterificacao.txt
+          $p = Start-Process -FilePath "dist/Ripper.exe" -ArgumentList "--verificar" -NoNewWindow -Wait -PassThru
+          Get-Content "dist/verificacao.txt"
           if ($p.ExitCode -ne 0) { throw "verificacao falhou ($($p.ExitCode))" }
 
       - uses: actions/upload-artifact@v4
