@@ -154,6 +154,11 @@ existe porque três travamentos chegaram ao uso real e nenhum aparecia ao
 compilar; o terceiro foi pego por esse teste na primeira execução, antes de
 sair.
 
+Dois desses testes são pulados no CI: eles disparam consultas CIM e
+PowerShell reais, que custam segundos aqui e mais de quinze minutos num
+runner frio. Continuam rodando localmente, que é onde pegam o erro — antes
+do commit.
+
 ## Decisões de projeto
 
 O raciocínio por trás das escolhas não óbvias — por que o roteiro tem essa

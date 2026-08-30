@@ -19,7 +19,15 @@ O QUE ESTE TESTE NAO FAZ
 from __future__ import annotations
 
 import inspect
+import os
 import unittest
+
+# Chamar todo metodo publico dispara consultas CIM e PowerShell de verdade.
+# Aqui isso leva segundos; num runner do GitHub leva mais de quinze
+# minutos, porque cada invocacao do PowerShell custa muito mais numa
+# maquina virtual sem estado quente. O teste continua valendo localmente,
+# que e onde ele pega o erro antes do commit.
+NO_CI = bool(os.environ.get("CI"))
 
 from PySide6.QtWidgets import QApplication
 
@@ -72,6 +80,7 @@ class TestFumacaDaInterface(unittest.TestCase):
                 self.assertIs(self.janela.pilha.currentWidget(),
                               self.janela.paineis[chave])
 
+    @unittest.skipIf(NO_CI, "dispara varredura de disco e rede")
     def test_verificacao_inicial_nao_estoura(self):
         # Este e o caminho exato do KeyError: 'espaco'.
         self.janela.mostrar("inicio")
@@ -85,6 +94,7 @@ class TestFumacaDaInterface(unittest.TestCase):
         _app.processEvents()
         self.janela.operacao("")
 
+    @unittest.skipIf(NO_CI, "consulta o sistema de verdade; lento em runner")
     def test_metodos_publicos_seguros_de_todo_painel(self):
         """Chama todo metodo publico sem argumento obrigatorio.
 

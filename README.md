@@ -156,6 +156,11 @@ default. It exists because three crashes reached real use and none of them
 showed up at compile time; the third was caught by that test on its first
 run, before shipping.
 
+Two of those tests are skipped on CI: they issue real CIM and PowerShell
+queries, which cost seconds here and over fifteen minutes on a cold runner.
+They still run locally, which is where they catch the error — before the
+commit.
+
 ## Design decisions
 
 The reasoning behind the non-obvious choices — why the routine is ordered
