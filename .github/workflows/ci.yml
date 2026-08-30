@@ -22,6 +22,10 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+          # O arquivo de dependencias se chama requisitos.txt; sem apontar
+          # o caminho, a acao procura por requirements.txt e falha antes
+          # de instalar qualquer coisa.
+          cache-dependency-path: requisitos.txt
 
       - name: Instalar dependencias
         run: pip install -r requisitos.txt
@@ -48,6 +52,10 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+          # O arquivo de dependencias se chama requisitos.txt; sem apontar
+          # o caminho, a acao procura por requirements.txt e falha antes
+          # de instalar qualquer coisa.
+          cache-dependency-path: requisitos.txt
 
       - run: pip install -r requisitos.txt
 
